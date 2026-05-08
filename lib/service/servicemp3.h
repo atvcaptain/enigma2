@@ -384,6 +384,7 @@ private:
 	};
 	int m_state;
 	bool m_gstdot;
+	bool m_use_playbin3;
 	GstElement* m_gst_playbin;
 	GstTagList* m_stream_tags;
 	bool m_coverart;
@@ -391,6 +392,7 @@ private:
 
 	eFixedMessagePump<ePtr<GstMessageContainer>> m_pump;
 
+	GstElement* createPlaybin();
 	audiotype_t gstCheckAudioPad(GstStructure* structure);
 	void gstBusCall(GstMessage* msg);
 	void handleMessage(GstMessage* msg);

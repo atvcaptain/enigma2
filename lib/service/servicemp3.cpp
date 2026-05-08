@@ -907,6 +907,34 @@ void eServiceMP3InfoContainer::setBuffer(GstBuffer* buffer) {
 // eServiceMP3
 int eServiceMP3::ac3_delay = 0, eServiceMP3::pcm_delay = 0;
 
+GstElement* eServiceMP3::createPlaybin() {
+	const bool requested_playbin3 = eSimpleConfig::getBool("config.misc.usegstplaybin3", false);
+	GstElement* playbin = NULL;
+
+	m_use_playbin3 = false;
+	if (requested_playbin3) {
+		playbin = gst_element_factory_make("playbin3", "playbin3");
+		if (playbin) {
+			m_use_playbin3 = true;
+			eDebug("[eServiceMP3][pb3][phase=create] backend=playbin3 requested=1 fallback=0");
+		} else {
+			eDebug("[eServiceMP3][pb3][phase=create] playbin3 factory unavailable, falling back to playbin");
+		}
+	}
+
+	if (!playbin) {
+		playbin = gst_element_factory_make("playbin", "playbin");
+		if (playbin)
+			eDebug("[eServiceMP3][pb3][phase=create] backend=playbin requested_playbin3=%d fallback=%d",
+				   requested_playbin3, requested_playbin3);
+		else
+			eDebug("[eServiceMP3][pb3][phase=create] failed to create playbin backend requested_playbin3=%d",
+				   requested_playbin3);
+	}
+
+	return playbin;
+}
+
 /**
  * @brief Constructs an eServiceMP3 object with the given service reference.
  *
@@ -990,6 +1018,8 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 
 	m_state = stIdle;
 	m_gstdot = eSimpleConfig::getBool("config.crash.gstdot", false);
+	m_use_playbin3 = false;
+	m_gst_playbin = NULL;
 	m_coverart = false;
 	m_subtitles_paused = false;
 	// eDebug("[eServiceMP3] construct!");
@@ -1164,11 +1194,7 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 	eDebug("[eServiceMP3] playbin uri=%s", uri);
 	if (suburi != NULL)
 		eDebug("[eServiceMP3] playbin suburi=%s", suburi);
-	bool useplaybin3 = eSimpleConfig::getBool("config.misc.usegstplaybin3", false);
-	if (useplaybin3)
-		m_gst_playbin = gst_element_factory_make("playbin3", "playbin3");
-	else
-		m_gst_playbin = gst_element_factory_make("playbin", "playbin");
+	m_gst_playbin = createPlaybin();
 	if (m_gst_playbin) {
 		if (dvb_audiosink) {
 			if (m_sourceinfo.is_audio) {
