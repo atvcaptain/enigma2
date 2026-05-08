@@ -908,11 +908,11 @@ void eServiceMP3InfoContainer::setBuffer(GstBuffer* buffer) {
 int eServiceMP3::ac3_delay = 0, eServiceMP3::pcm_delay = 0;
 
 GstElement* eServiceMP3::createPlaybin() {
-	const bool requested_playbin3 = eSimpleConfig::getBool("config.misc.usegstplaybin3", false);
 	GstElement* playbin = NULL;
 
+	m_requested_playbin3 = eSimpleConfig::getBool("config.misc.usegstplaybin3", false);
 	m_use_playbin3 = false;
-	if (requested_playbin3) {
+	if (m_requested_playbin3) {
 		playbin = gst_element_factory_make("playbin3", "playbin3");
 		if (playbin) {
 			m_use_playbin3 = true;
@@ -926,13 +926,69 @@ GstElement* eServiceMP3::createPlaybin() {
 		playbin = gst_element_factory_make("playbin", "playbin");
 		if (playbin)
 			eDebug("[eServiceMP3][pb3][phase=create] backend=playbin requested_playbin3=%d fallback=%d",
-				   requested_playbin3, requested_playbin3);
+				   m_requested_playbin3, m_requested_playbin3);
 		else
 			eDebug("[eServiceMP3][pb3][phase=create] failed to create playbin backend requested_playbin3=%d",
-				   requested_playbin3);
+				   m_requested_playbin3);
 	}
 
 	return playbin;
+}
+
+const char* eServiceMP3::playbinBackendName() const {
+	return m_use_playbin3 ? "playbin3" : "playbin";
+}
+
+bool eServiceMP3::hasPlaybinProperty(const char* property) const {
+	if (!m_gst_playbin || !property)
+		return false;
+	return g_object_class_find_property(G_OBJECT_GET_CLASS(m_gst_playbin), property) != NULL;
+}
+
+void eServiceMP3::logPlaybinProperties() const {
+	if (!m_gst_playbin || !m_requested_playbin3)
+		return;
+
+	static const char* properties[] = {
+		"audio-sink",
+		"video-sink",
+		"text-sink",
+		"flags",
+		"uri",
+		"suburi",
+		"source",
+		"current-audio",
+		"current-text",
+		"n-audio",
+		"n-text",
+		"buffer-duration",
+		"buffer-size",
+		"connection-speed",
+		"ring-buffer-max-size",
+	};
+
+	for (unsigned int i = 0; i < sizeof(properties) / sizeof(properties[0]); ++i) {
+		eDebug("[eServiceMP3][pb3][phase=props] backend=%s property=%s present=%d",
+			   playbinBackendName(), properties[i], hasPlaybinProperty(properties[i]));
+	}
+}
+
+void eServiceMP3::logPlaybinStartup(const gchar* uri, guint flags) const {
+	if (!m_gst_playbin || !m_requested_playbin3)
+		return;
+
+	eDebug("[eServiceMP3][pb3][phase=config] backend=%s requested_playbin3=%d flags=0x%x uri=%s",
+		   playbinBackendName(), m_requested_playbin3, flags, uri ? uri : "(null)");
+	eDebug("[eServiceMP3][pb3][phase=config] source audio=%d video=%d streaming=%d hls=%d prefill=%d "
+		   "download=%d buffer_size=%d",
+		   m_sourceinfo.is_audio, m_sourceinfo.is_video, m_sourceinfo.is_streaming, m_sourceinfo.is_hls,
+		   m_use_prefillbuffer, !m_download_buffer_path.empty(), m_buffer_size);
+	eDebug("[eServiceMP3][pb3][phase=config] sinks audio=%d video=%d text=%d audio_ptr=%p video_ptr=%p text_ptr=%p",
+		   dvb_audiosink_ok, dvb_videosink_ok, dvb_subsink_ok, (void*)dvb_audiosink, (void*)dvb_videosink,
+		   (void*)dvb_subsink);
+	eDebug("[eServiceMP3][pb3][phase=config] external_subtitle path=%s extension=%s language=%s",
+		   m_external_subtitle_path.c_str(), m_external_subtitle_extension.c_str(),
+		   m_external_subtitle_language.c_str());
 }
 
 /**
@@ -1019,6 +1075,7 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 	m_state = stIdle;
 	m_gstdot = eSimpleConfig::getBool("config.crash.gstdot", false);
 	m_use_playbin3 = false;
+	m_requested_playbin3 = false;
 	m_gst_playbin = NULL;
 	m_coverart = false;
 	m_subtitles_paused = false;
@@ -1242,6 +1299,8 @@ eServiceMP3::eServiceMP3(eServiceReference ref)
 		}
 		g_object_set(m_gst_playbin, "flags", flags, NULL);
 		g_object_set(m_gst_playbin, "uri", uri, NULL);
+		logPlaybinStartup(uri, flags);
+		logPlaybinProperties();
 		if (dvb_subsink) {
 			m_subs_to_pull_handler_id =
 				g_signal_connect(dvb_subsink, "new-buffer", G_CALLBACK(gstCBsubtitleAvail), this);

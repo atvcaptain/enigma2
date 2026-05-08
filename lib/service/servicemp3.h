@@ -385,6 +385,7 @@ private:
 	int m_state;
 	bool m_gstdot;
 	bool m_use_playbin3;
+	bool m_requested_playbin3;
 	GstElement* m_gst_playbin;
 	GstTagList* m_stream_tags;
 	bool m_coverart;
@@ -393,6 +394,10 @@ private:
 	eFixedMessagePump<ePtr<GstMessageContainer>> m_pump;
 
 	GstElement* createPlaybin();
+	const char* playbinBackendName() const;
+	bool hasPlaybinProperty(const char* property) const;
+	void logPlaybinProperties() const;
+	void logPlaybinStartup(const gchar* uri, guint flags) const;
 	audiotype_t gstCheckAudioPad(GstStructure* structure);
 	void gstBusCall(GstMessage* msg);
 	void handleMessage(GstMessage* msg);
